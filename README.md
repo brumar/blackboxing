@@ -6,11 +6,19 @@ This is an exploration, not a recommendation. The goal is to open the discussion
 
 The approach we're trying: humans own interfaces and tests, AI agents own implementation. Humans are "forbidden" to look at the implementation.
 
+My two questions are:
+
+- What quality attributes should modules exhibit in this new era of ai-assisted programming?
+- How to structure the discipline of writing code around this new target? Both for Human and for AI agents
+
+This repository is a modest attempt to answer those questions.
+
 ## Modularity First
 
 Good software is modular software. Ousterhout's *A Philosophy of Software Design* argues for **deep modules**: a simple interface hiding complex behavior. The value of a module is the complexity it absorbs — the gap between what it does and what its caller needs to know.
 
 Deep modules have narrow interfaces, explicit dependencies (everything injected, nothing hidden), and no leaking internals. These are old ideas. They're good ideas regardless of who writes the code.
+
 
 ## What Changes with AI
 
@@ -35,9 +43,8 @@ The hypothesis is that a module with these properties narrows the gap between "w
 | Module docs | Human + AI | Yes |
 | Implementation code | AI | **No** |
 
-I think the black box holds when the code has specific properties: **testability** (stubs and fakes, no integration harness, purity), **replaceability** (cheap rewrites mean the spec is the valuable artifact, not the code), and **composability** (swapping implementations has zero ripple effects).
 
-## The Workflow
+## Workflow Suggestion
 
 ```
 1. BRAINSTORM   Human + AI define the problem and module boundaries
@@ -52,16 +59,18 @@ I think the black box holds when the code has specific properties: **testability
 
 Writing docs before tests is deliberate. My bet is that explaining how to use the module — instantiation, common patterns, error handling — forces you to experience the API as a consumer. Awkward docs mean an awkward interface. Fix the design here, before locking it in with tests.
 
+If it feels like a mixture of TDD, SDD, Documentation Driven Design and vibe coding, that's warranted.
+
 ## Kata
 
-The `kata/` folder contains attempts at following the blackboxing discipline on small, self-contained problems. They serve as examples of what the workflow looks like in practice — not as a prescribed structure.
+The `kata/` folder contains attempts at following the blackboxing discipline on small problems. They serve as examples of what the workflow looks like in practice — not as a prescribed structure.
 
 ### Rate Limiter (Python)
 
 A sliding-window rate limiter with burst support. Built using the two skills below over several sessions. The `conversations/` folder contains exported Claude Code sessions showing the human-AI collaboration from spec through implementation.
 
 - **Problem**: [`kata/rate-limiter/PROBLEM.md`](kata/rate-limiter/PROBLEM.md)
-- **Exercise**: [`kata/rate-limiter/ex1-python/`](kata/rate-limiter/ex1-python/) — 76/76 tests passing
+- **Example of "solution"**: [`kata/rate-limiter/ex1-python/`](kata/rate-limiter/ex1-python/) — 76/76 tests passing. [Conversation files](kata/rate-limiter/ex1-python/conversations/) are maybe the most interesting documents.
 
 ## Skills
 
