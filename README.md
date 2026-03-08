@@ -94,9 +94,9 @@ This feels uncomfortable at first. So did TDD.
 Two Claude Code skills have been created to support this paradigm (alpha release):
 
 - **`blackboxing-spec`** — guides the spec phase: brainstorming, interface co-design, test writing
-- **`blackboxing-agent`** — autonomous agent that picks a role and improves module internals
+- **`blackboxing-agent`** — autonomous agent that picks a role, improves module internals, challenges broken specs, and maintains `CLAUDE.md`
 
-See `skills/` for the packaged `.skill` files.
+See `.claude/skills/` for the skill definitions.
 
 ## Why Modularity Matters in the Agentic Era
 
