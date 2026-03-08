@@ -165,8 +165,37 @@ Every call to `check` / `acheck` returns a `CheckResult`:
 | Field         | Type    | Meaning                                       |
 |---------------|---------|-----------------------------------------------|
 | `allowed`     | `bool`  | Whether this call is permitted                 |
-| `remaining`   | `int`   | Calls left in the current window               |
+| `remaining`   | `int`   | Calls available right now (see below)          |
 | `retry_after` | `float` | Seconds until next allowed call (0.0 if allowed) |
+
+### `retry_after` honor contract
+
+**If `retry_after` says wait X seconds, waiting X seconds guarantees the next call is
+allowed.** This is a hard contract, not advisory. Callers can set timers, sleep, or
+schedule retries based on this value with confidence.
+
+### `remaining` under burst
+
+When `burst_max < sustained_rate`, `remaining` reflects the number of calls you can make
+**right now** — i.e., available burst tokens, not sustained-rate headroom. This is the
+only actionable interpretation for API consumers deciding whether to proceed or back off.
+
+## Sliding Window Semantics
+
+The limiter uses a **sliding window**: each call expires individually at its own
+`timestamp + window_seconds`. This prevents the classic fixed-window exploit where
+callers get 2x throughput by timing calls across window boundaries.
+
+Example with `sustained_rate=3, window=10s`:
+- Calls at t=0, t=3, t=7 → 3 used, limit reached
+- At t=10: only the t=0 call expires → 1 slot opens
+- At t=13: the t=3 call also expires → 2 slots open
+
+## Store Data Loss
+
+If the store loses a key (TTL expiry, eviction, restart), the limiter treats the caller
+as fresh — full quota restored. The limiter never crashes or permanently blocks due to
+missing store data. This is "fail open on data loss" behavior.
 
 ## Error Handling
 
