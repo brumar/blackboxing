@@ -1,107 +1,74 @@
-# Blackboxing: A Human-AI Coding Paradigm
+# Blackboxing
 
-## Core Principle
+AI agents produce code faster than it can be reviewed. The usual answer is to review anyway. This repo tries something different: explore whether modules can be designed so that review adds little. Not with new ideas — software engineering has thought about modularity and contracts for decades. The question is which lessons matter most when AI writes the code.
 
-**Humans own the interface. Agents own the implementation.**
+This is an exploration, not a recommendation. The goal is to open the discussion.
 
-The human never reads or modifies implementation code. The implementation is a black box — tested, maintained, and debugged entirely by AI agents. Human effort is concentrated where it matters most: defining *what* a module does, not *how*.
+The approach we're trying: humans own interfaces and tests, AI agents own implementation. Humans are "forbidden" to look at the implementation.
 
-## Why
+## Modularity First
 
-1. **Interfaces are the expensive decision.** A bad interface forces bad implementations and costly rewrites. A good interface makes implementations replaceable. In a world where AI can reimplement a module in minutes, the interface is the only artifact worth sustained human thought.
+Good software is modular software. Ousterhout's *A Philosophy of Software Design* argues for **deep modules**: a simple interface hiding complex behavior. The value of a module is the complexity it absorbs — the gap between what it does and what its caller needs to know.
 
-2. **Rewrites are cheap now.** When regenerating an implementation costs minutes instead of weeks, the economics of software change. Throwing away code and reimplementing from a spec becomes a routine operation, not a crisis.
+Deep modules have narrow interfaces, explicit dependencies (everything injected, nothing hidden), and no leaking internals. These are old ideas. They're good ideas regardless of who writes the code.
 
-3. **Humans are bad at implementation discipline.** We cut corners, accumulate tech debt, mix concerns. An agent given a clear spec and strong constraints can be more consistent, more thorough, and more willing to start over when needed.
+## What Changes with AI
 
-4. **TDD already proved the direction.** Test-Driven Development showed that thinking interface-first produces better software. Blackboxing takes TDD to its logical conclusion: write the tests, write the types, and *never look at the green code*.
+If AI agents write the implementation, the properties we want from modules arguably shift:
 
-## The Paradigm
+- **Testability** matters more — tests are how the human verifies work they don't read. Stubs, fakes, purity, no integration harness.
+- **Replaceability** becomes practical — an agent that can rewrite a module from scratch in minutes makes the spec the valuable artifact, not the code.
+- **Composability** is essential — swapping implementations must have zero ripple effects, because it will happen often.
 
-### What the Human Does
+The hypothesis is that a module with these properties narrows the gap between "what the tests verify" and "what code review would catch."
 
-- **Co-designs interfaces** with the AI through dialogue. The AI pushes back if the human leaks implementation details into the interface.
-- **Defines module boundaries** following the Deep Module philosophy (simple public interface, complex hidden implementation).
-- **Writes or co-writes tests**: property-based tests, classical unit tests, integration tests, and performance benchmarks. These tests *are* the specification.
-- **Defines non-functional requirements**: latency budgets, memory constraints, concurrency guarantees, error semantics.
-- **Never reads implementation code.** This is the discipline. If a requirement isn't captured in a test or a type, it doesn't exist.
+## How It's Organized
 
-### What the AI Does
+**Humans** co-design interfaces with the AI, write or co-write tests as specification, and don't read implementation code.
 
-- **Challenges the interface** during co-design. Pushes back on leaky abstractions, suggests simpler contracts, identifies missing edge cases.
-- **Implements the module** to satisfy all tests and constraints.
-- **Maintains internal quality**: clean architecture, readability (for other agents), maintainability — even though no human will see it.
-- **Debugs failures** across module boundaries. When something breaks, the AI investigates, proposes whether the bug is in the spec (test/interface) or the implementation, and fixes accordingly.
-- **Adapts or reimplements** when requirements evolve. May modify the existing implementation or rewrite from scratch — the human doesn't care which, as long as the tests pass.
+**AI agents** challenge the interface during design, implement to satisfy all tests, maintain internal quality, debug across boundaries, and adapt or rewrite when requirements change.
 
-### The Artifacts
-
-| Artifact | Owner | Visible to Human |
+| Artifact | Owner | Human reads it? |
 |---|---|---|
-| Module interface (public API, types) | Human + AI | Yes |
-| Test suite (property, unit, perf) | Human + AI | Yes |
-| Module documentation (DX) | Human + AI | Yes |
-| Non-functional requirements | Human | Yes |
+| Public API / types | Human + AI | Yes |
+| Test suite | Human + AI | Yes |
+| Module docs | Human + AI | Yes |
 | Implementation code | AI | **No** |
-| Internal documentation / architecture | AI | No |
 
-### The Workflow
+I think the black box holds when the code has specific properties: **testability** (stubs and fakes, no integration harness, purity), **replaceability** (cheap rewrites mean the spec is the valuable artifact, not the code), and **composability** (swapping implementations has zero ripple effects).
+
+## The Workflow
 
 ```
 1. BRAINSTORM   Human + AI define the problem and module boundaries
-2. INTERFACE    Human + AI co-design the public API
-                AI pushes back on implementation leaks
-3. CONTRACT     Human + AI write tests (the specification)
-                Property-based, classical, performance
-4. IMPLEMENT    AI implements (human does not look)
-5. VERIFY       Tests run. Green = done. Red = AI debugs or
-                human refines the spec.
-6. EVOLVE       Requirements change? Update the spec/tests.
-                AI adapts or rewrites. Repeat from step 2 or 3.
+2. INTERFACE    Co-design the public API
+3. DOCUMENT     Write developer-facing docs — usage, examples, error semantics
+4. CONTRACT     Write tests as specification
+5. IMPLEMENT    AI implements (human doesn't look). Tests must pass
+6. CHALLENGE    AI can suggest spec updates/improvements
+7. IMPROVE      Agents improve code quality and internal documentation for few rounds.
+8. EVOLVE       Requirements change → update spec → AI adapts or rewrites
 ```
 
-## Design Principles
+Writing docs before tests is deliberate. My bet is that explaining how to use the module — instantiation, common patterns, error handling — forces you to experience the API as a consumer. Awkward docs mean an awkward interface. Fix the design here, before locking it in with tests.
 
-### Deep Modules (Ousterhout)
+## Kata
 
-Modules should have **simple interfaces** and **complex implementations**. The interface should hide as much complexity as possible. This is the ideal shape for Blackboxing: the human manages a small, expressive surface; the agent manages the deep internals.
+The `kata/` folder contains attempts at following the blackboxing discipline on small, self-contained problems. They serve as examples of what the workflow looks like in practice — not as a prescribed structure.
 
-### Tests as Specification
+### Rate Limiter (Python)
 
-If the human cannot see the implementation, every expectation must be encoded as a test or a type constraint. This forces extraordinary rigor in test design — which is a feature, not a bug. Vague requirements that would normally be "checked by reading the code" must be made explicit.
+A sliding-window rate limiter with burst support. Built using the two skills below over several sessions. The `conversations/` folder contains exported Claude Code sessions showing the human-AI collaboration from spec through implementation.
 
-### Pure Modules and Dependency Injection
+- **Problem**: [`kata/rate-limiter/PROBLEM.md`](kata/rate-limiter/PROBLEM.md)
+- **Exercise**: [`kata/rate-limiter/ex1-python/`](kata/rate-limiter/ex1-python/) — 76/76 tests passing
 
-Every blackboxed module must be **pure** — it declares its dependencies explicitly through its interface, never reaching for them internally. All external dependencies (other modules, services, I/O, configuration) are **injected** through the constructor or method parameters.
+## Skills
 
-This is non-negotiable because:
-- **Testability**: Pure modules with injected dependencies are trivially testable. The human can write tests against the interface using stubs, mocks, or alternative implementations without knowing anything about the internals.
-- **Composability**: Modules become pluggable building blocks. Swapping an implementation (or letting the AI rewrite one) has zero ripple effects as long as the interface contract holds.
-- **No hidden coupling**: If a module secretly depends on a database, a file system, or a global, the "no peeking" rule breaks down — the human can't reason about the module's behavior from its interface alone. Dependency injection makes all coupling visible at the interface level.
-- **Enforces the black box**: A pure module's behavior is fully determined by its interface inputs and injected dependencies. No hidden state, no ambient authority, no surprises.
+The repo includes two [Claude Code skills](https://docs.anthropic.com/en/docs/claude-code/skills) (in `.claude/skills/`) that attempt to encode the workflow above — `blackboxing-spec` for the spec phase and `blackboxing-agent` for autonomous implementation. They're early and rough. The methodology and the quality attributes that make it viable (testability, replaceability, composability) matter more than the tooling. The skills follow from the ideas, not the other way around.
 
-### No Peeking
+## Blackboxing vs Spec-Driven Development
 
-The "no peeking" rule is the most radical — and most important — constraint. It forces the human to:
-- Express every requirement formally
-- Trust the test suite completely
-- Treat the module as a true black box
+Spec-Driven Development (SDD) is the mainstream term for "write a specification, let AI generate code." Blackboxing shares the premise but makes different choices: specs are executable (tests, not documents), the goal is to eliminate code review (not just assist it), and the architecture is opinionated (deep modules, dependency injection, purity).
 
-This feels uncomfortable at first. So did TDD.
-
-## Tooling
-
-Two Claude Code skills have been created to support this paradigm (alpha release):
-
-- **`blackboxing-spec`** — guides the spec phase: brainstorming, interface co-design, test writing
-- **`blackboxing-agent`** — autonomous agent that picks a role, improves module internals, challenges broken specs, and maintains `CLAUDE.md`
-
-See `.claude/skills/` for the skill definitions.
-
-## Why Modularity Matters in the Agentic Era
-
-Strong modularity isn't just good design — it's a practical necessity for AI agents. Agents operate within a limited context window. A deep module with a small interface and a comprehensive test suite fits comfortably in that window. An agent can hold the entire module in its head, reason about it fully, and implement or refactor with confidence. Monoliths and tangled dependencies exceed what any agent can reliably work with. The smaller and more self-contained the unit of work, the better agents perform.
-
-## The Bet
-
-AI agents will continue to improve at implementation. The gap between "what the human specifies" and "what the agent delivers" will shrink. Investing human effort in specification — interfaces, tests, requirements — is the highest-leverage activity in this future. Blackboxing is a bet that this future is already here.
+Full comparison: [SDD-COMPARISON.md](SDD-COMPARISON.md)
