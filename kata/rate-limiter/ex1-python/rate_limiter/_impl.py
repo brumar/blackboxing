@@ -1,8 +1,8 @@
 """Rate Limiter — implementation (black box).
 
-Hybrid algorithm:
-- Fixed window counter for sustained rate (resets when window expires)
-- Token bucket for burst limiting (refills continuously)
+Sliding window log + token bucket:
+- Sliding window: stores timestamps of each allowed call, prunes expired ones
+- Token bucket: burst tokens refill continuously, cap rapid-fire calls
 """
 
 from __future__ import annotations
@@ -16,16 +16,23 @@ from rate_limiter.interface import (
     Store,
 )
 
-# State: (window_start, call_count, burst_tokens, last_burst_time)
-_STATE_FMT = "!dddd"
+# State layout: [burst_tokens: double, last_burst_time: double, N timestamps: double...]
+_HEADER_FMT = "!dd"
+_HEADER_SIZE = struct.calcsize(_HEADER_FMT)
+_TS_SIZE = struct.calcsize("!d")
 
 
-def _pack(window_start: float, count: float, burst: float, burst_time: float) -> bytes:
-    return struct.pack(_STATE_FMT, window_start, count, burst, burst_time)
+def _pack(burst: float, burst_time: float, timestamps: list[float]) -> bytes:
+    header = struct.pack(_HEADER_FMT, burst, burst_time)
+    body = struct.pack(f"!{len(timestamps)}d", *timestamps) if timestamps else b""
+    return header + body
 
 
-def _unpack(raw: bytes) -> tuple[float, float, float, float]:
-    return struct.unpack(_STATE_FMT, raw)
+def _unpack(raw: bytes) -> tuple[float, float, list[float]]:
+    burst, burst_time = struct.unpack(_HEADER_FMT, raw[:_HEADER_SIZE])
+    n = (len(raw) - _HEADER_SIZE) // _TS_SIZE
+    timestamps = list(struct.unpack(f"!{n}d", raw[_HEADER_SIZE:])) if n else []
+    return burst, burst_time, timestamps
 
 
 def validate_config(config: RateLimiterConfig) -> None:
@@ -47,50 +54,53 @@ def _compute(
 ) -> tuple[bool, int, float, bytes]:
     """Core logic. Returns (allowed, remaining, retry_after, new_state)."""
     if raw is None:
-        window_start = now
-        count = 0.0
         burst = float(config.burst_max)
         burst_time = now
+        timestamps: list[float] = []
     else:
-        window_start, count, burst, burst_time = _unpack(raw)
+        burst, burst_time, timestamps = _unpack(raw)
 
-    # Reset window if expired
-    if now >= window_start + config.window_seconds:
-        window_start = now
-        count = 0.0
+    # Prune timestamps outside the current window
+    window_start = now - config.window_seconds
+    timestamps = [t for t in timestamps if t > window_start]
 
     # Refill burst tokens
     elapsed = now - burst_time
     if elapsed > 0:
         burst_rate = config.burst_max / config.window_seconds
-        burst = min(config.burst_max, burst + elapsed * burst_rate)
+        burst = min(float(config.burst_max), burst + elapsed * burst_rate)
     burst_time = now
 
-    sustained_remaining = config.sustained_rate - int(count)
+    count = len(timestamps)
+    sustained_remaining = config.sustained_rate - count
     burst_available = burst >= 1.0
 
     if sustained_remaining >= 1 and burst_available:
-        count += 1.0
+        timestamps.append(now)
         burst -= 1.0
-        new_sustained = config.sustained_rate - int(count)
+        new_sustained = sustained_remaining - 1
         remaining = min(int(burst), new_sustained)
-        state = _pack(window_start, count, burst, burst_time)
+        state = _pack(burst, burst_time, timestamps)
         return True, remaining, 0.0, state
 
-    # Rejected
-    burst_wait = (
-        (1.0 - burst) / (config.burst_max / config.window_seconds)
-        if burst < 1.0
-        else 0.0
-    )
-    sustained_wait = (
-        (window_start + config.window_seconds - now)
-        if sustained_remaining < 1
-        else 0.0
-    )
+    # Rejected — compute retry_after
+    if sustained_remaining < 1:
+        # Earliest timestamp will expire first, opening a slot
+        oldest = min(timestamps)
+        sustained_wait = oldest + config.window_seconds - now
+    else:
+        sustained_wait = 0.0
+
+    if burst < 1.0:
+        burst_rate = config.burst_max / config.window_seconds
+        burst_wait = (1.0 - burst) / burst_rate
+    else:
+        burst_wait = 0.0
+
     retry_after = min(max(burst_wait, sustained_wait), config.window_seconds)
-    state = _pack(window_start, count, burst, burst_time)
+    state = _pack(burst, burst_time, timestamps)
     return False, 0, retry_after, state
+
 
 
 def do_check(
