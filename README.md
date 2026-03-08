@@ -98,6 +98,10 @@ Two Claude Code skills have been created to support this paradigm (alpha release
 
 See `skills/` for the packaged `.skill` files.
 
+## Why Modularity Matters in the Agentic Era
+
+Strong modularity isn't just good design — it's a practical necessity for AI agents. Agents operate within a limited context window. A deep module with a small interface and a comprehensive test suite fits comfortably in that window. An agent can hold the entire module in its head, reason about it fully, and implement or refactor with confidence. Monoliths and tangled dependencies exceed what any agent can reliably work with. The smaller and more self-contained the unit of work, the better agents perform.
+
 ## The Bet
 
 AI agents will continue to improve at implementation. The gap between "what the human specifies" and "what the agent delivers" will shrink. Investing human effort in specification — interfaces, tests, requirements — is the highest-leverage activity in this future. Blackboxing is a bet that this future is already here.
