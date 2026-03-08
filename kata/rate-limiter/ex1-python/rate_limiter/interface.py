@@ -141,18 +141,31 @@ class RateLimiter:
             ValueError: If *config* is invalid (non-positive values,
                         burst_max > sustained_rate, etc.).
         """
-        ...
+        from rate_limiter._impl import validate_config
+        from rate_limiter.defaults import MemoryStore, SystemClock
+
+        validate_config(config)
+        self._config = config
+        self._clock: Clock = clock if clock is not None else SystemClock()
+        if store is not None:
+            self._store: Store = store
+        else:
+            self._store = MemoryStore(clock=self._clock)
 
     def check(self, key: str) -> CheckResult:
         """Check (and consume) a call for *key*.
 
         Returns a ``CheckResult`` with the decision and metadata.
         """
-        ...
+        from rate_limiter._impl import do_check
+
+        return do_check(key, self._config, self._store, self._clock)
 
     async def acheck(self, key: str) -> CheckResult:
         """Async variant of ``check``."""
-        ...
+        from rate_limiter._impl import do_acheck
+
+        return await do_acheck(key, self._config, self._store, self._clock)
 
     def reset(self, key: str) -> None:
         """Clear all rate-limit state for *key*.
@@ -160,8 +173,8 @@ class RateLimiter:
         After reset, the next ``check`` for this key behaves as if
         the caller has never been seen.
         """
-        ...
+        self._store.delete(key)
 
     async def areset(self, key: str) -> None:
         """Async variant of ``reset``."""
-        ...
+        await self._store.adelete(key)
