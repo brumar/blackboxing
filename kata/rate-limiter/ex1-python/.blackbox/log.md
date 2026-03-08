@@ -17,3 +17,20 @@
 **What I did:** Rewrote `_impl.py` from fixed-window counter to sliding window log + token bucket. State now stores individual call timestamps (variable-length) instead of a single counter. Eliminates the boundary-doubling issue where callers could get 2× throughput by timing calls across window edges. Also removed dead `_do` stub.
 **Test status:** 57 passing, 0 failing, 0 skipped
 **For next agent:** Hardener could add internal assertions and stress-test the sliding window with large sustained_rate values (state grows linearly with allowed calls — potential memory concern for very high rates). Race condition from Reviewer's notes remains unaddressed (spec-level issue).
+
+## 2026-03-08 — Spec Phase (human + AI)
+**What we did:** Audited the test suite for spec gaps and added 19 new tests across 4 new files:
+- `test_retry_after_honor.py` (6 tests) — retry_after honor contract: waiting retry_after seconds MUST allow the next call. Includes property-based test across all valid configs.
+- `test_sliding_window.py` (4 tests) — sliding window semantics: individual call expiry, no boundary doubling, gradual slot recovery. These tests would FAIL on a fixed-window implementation.
+- `test_burst_remaining.py` (6 tests) — remaining/retry_after semantics under burst: remaining reflects burst tokens, retry_after honored for burst rejections.
+- `test_store_resilience.py` (3 tests) — graceful degradation on store data loss, shared store between limiter instances.
+
+Also updated DOCS.md with: retry_after honor contract, remaining-under-burst semantics, sliding window explanation, and store data loss behavior.
+
+**Test status:** 76 passing, 0 failing, 0 skipped
+**For next agent:** All 19 new tests pass against current impl — these lock in existing behavior, no implementation changes needed. Open items: (1) Race condition still unaddressed (spec-level — needs Store protocol change). (2) Memory growth with high sustained_rate could use a hardener pass with internal assertions or an alternative compacted representation.
+
+## 2026-03-08 — Hardener
+**What I did:** Added three defensive measures to `_impl.py`: (1) `_unpack` now returns `None` on corrupted/truncated bytes instead of crashing — `_compute` treats corrupted state as fresh (fail-open). (2) Burst tokens clamped to `[0, burst_max]` after refill to guard against float drift. (3) Internal assertions on `remaining >= 0` and `retry_after >= 0` post-computation to catch invariant violations early.
+**Test status:** 76 passing, 0 failing, 0 skipped
+**For next agent:** Doc-gardener could create the repo-root `CLAUDE.md` (doesn't exist yet) and verify `.blackbox/log.md` is trimmed. Open items remain: (1) Race condition (spec-level). (2) Memory growth with high sustained_rate (state stores one timestamp per allowed call). (3) `do_check`/`do_acheck` sync/async duplication is minor but still present.

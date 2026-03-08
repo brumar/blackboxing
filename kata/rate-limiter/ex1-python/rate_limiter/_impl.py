@@ -28,11 +28,20 @@ def _pack(burst: float, burst_time: float, timestamps: list[float]) -> bytes:
     return header + body
 
 
-def _unpack(raw: bytes) -> tuple[float, float, list[float]]:
-    burst, burst_time = struct.unpack(_HEADER_FMT, raw[:_HEADER_SIZE])
-    n = (len(raw) - _HEADER_SIZE) // _TS_SIZE
-    timestamps = list(struct.unpack(f"!{n}d", raw[_HEADER_SIZE:])) if n else []
-    return burst, burst_time, timestamps
+def _unpack(raw: bytes) -> tuple[float, float, list[float]] | None:
+    """Unpack state bytes. Returns None if data is corrupted or truncated."""
+    try:
+        if len(raw) < _HEADER_SIZE:
+            return None
+        burst, burst_time = struct.unpack(_HEADER_FMT, raw[:_HEADER_SIZE])
+        tail = len(raw) - _HEADER_SIZE
+        if tail % _TS_SIZE != 0:
+            return None
+        n = tail // _TS_SIZE
+        timestamps = list(struct.unpack(f"!{n}d", raw[_HEADER_SIZE:])) if n else []
+        return burst, burst_time, timestamps
+    except struct.error:
+        return None
 
 
 def validate_config(config: RateLimiterConfig) -> None:
@@ -53,22 +62,28 @@ def _compute(
     now: float, config: RateLimiterConfig, raw: bytes | None,
 ) -> tuple[bool, int, float, bytes]:
     """Core logic. Returns (allowed, remaining, retry_after, new_state)."""
-    if raw is None:
+    if raw is not None:
+        unpacked = _unpack(raw)
+    else:
+        unpacked = None
+
+    if unpacked is None:
         burst = float(config.burst_max)
         burst_time = now
         timestamps: list[float] = []
     else:
-        burst, burst_time, timestamps = _unpack(raw)
+        burst, burst_time, timestamps = unpacked
 
     # Prune timestamps outside the current window
     window_start = now - config.window_seconds
     timestamps = [t for t in timestamps if t > window_start]
 
-    # Refill burst tokens
+    # Refill burst tokens (clamp to valid range to guard against float drift)
     elapsed = now - burst_time
     if elapsed > 0:
         burst_rate = config.burst_max / config.window_seconds
         burst = min(float(config.burst_max), burst + elapsed * burst_rate)
+    burst = max(0.0, min(burst, float(config.burst_max)))
     burst_time = now
 
     count = len(timestamps)
@@ -80,6 +95,7 @@ def _compute(
         burst -= 1.0
         new_sustained = sustained_remaining - 1
         remaining = min(int(burst), new_sustained)
+        assert remaining >= 0, f"remaining must be >= 0, got {remaining}"
         state = _pack(burst, burst_time, timestamps)
         return True, remaining, 0.0, state
 
@@ -98,6 +114,7 @@ def _compute(
         burst_wait = 0.0
 
     retry_after = min(max(burst_wait, sustained_wait), config.window_seconds)
+    assert retry_after >= 0, f"retry_after must be >= 0, got {retry_after}"
     state = _pack(burst, burst_time, timestamps)
     return False, 0, retry_after, state
 
