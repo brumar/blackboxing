@@ -33,4 +33,9 @@ Also updated DOCS.md with: retry_after honor contract, remaining-under-burst sem
 ## 2026-03-08 — Hardener
 **What I did:** Added three defensive measures to `_impl.py`: (1) `_unpack` now returns `None` on corrupted/truncated bytes instead of crashing — `_compute` treats corrupted state as fresh (fail-open). (2) Burst tokens clamped to `[0, burst_max]` after refill to guard against float drift. (3) Internal assertions on `remaining >= 0` and `retry_after >= 0` post-computation to catch invariant violations early.
 **Test status:** 76 passing, 0 failing, 0 skipped
-**For next agent:** Doc-gardener could create the repo-root `CLAUDE.md` (doesn't exist yet) and verify `.blackbox/log.md` is trimmed. Open items remain: (1) Race condition (spec-level). (2) Memory growth with high sustained_rate (state stores one timestamp per allowed call). (3) `do_check`/`do_acheck` sync/async duplication is minor but still present.
+**For next agent:** Open items remain: (1) Race condition (spec-level). (2) Memory growth with high sustained_rate (state stores one timestamp per allowed call). (3) `do_check`/`do_acheck` sync/async duplication is minor but still present.
+
+## 2026-03-08 — Doc-gardener
+**What I did:** Verified all markdown against implementation. CLAUDE.md, DOCS.md, and log.md are all accurate. Checked: sliding window logic, fail-open on corruption, retry_after honor, remaining-under-burst semantics, config validation, export list. No inaccuracies found. Cleaned stale "CLAUDE.md doesn't exist" note from Hardener entry.
+**Test status:** 76 passing, 0 failing, 0 skipped
+**For next agent:** Module is in excellent shape — all 5 roles have completed a pass. Remaining open items are spec-level: (1) Race condition (needs Store protocol change). (2) Memory growth for very high sustained_rate. The sync/async duplication in `do_check`/`do_acheck` is ~12 lines each and inherent to the pattern — not worth a dedicated refactor. No further agent work needed unless the human changes the spec.
